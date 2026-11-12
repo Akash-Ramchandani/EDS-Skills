@@ -42,15 +42,20 @@ It is idempotent and does the following:
 1. Creates the repo from `adobe-rnd/aem-boilerplate-xwalk` (or `-xcom`) with `gh`.
 2. Rewrites `fstab.yaml` to `https://<aem-author>/bin/franklin.delivery/<owner>/<repo>/main` (`type: markup`, `suffix: .html`) and pushes to `main`. This **must** land before Code Sync is configured.
 3. Updates `paths.json` to `/content/<site-name>/` if the template release still ships that file.
-4. Downloads the AEM site template `.zip` from the latest boilerplate release next to the clone.
+4. Adds **only the new repo** to the account's existing AEM Code Sync installation through the GitHub API (`PUT /user/installations/{id}/repositories/{repo_id}`). It never widens the app to all repositories. The result is reported as `CODE_SYNC=added | already-covered | manual`.
+5. Downloads the AEM site template `.zip` from the latest boilerplate release next to the clone.
 
 If `gh` is missing or unauthenticated, stop and tell the user to run `gh auth login`; do not fall back to creating an empty repo by other means. Add `--skip-clone` when no local checkout is wanted.
 
 ## 3. Guided phase (needs the user's browser sign-ins)
 
-These four steps have no public API. Give the user **one** checklist with every value already filled in from the script's `RESOLVED CONFIGURATION` output. If browser-automation tools are available and the user agrees, drive the steps yourself instead; never type passwords for them.
+Apart from granting Code Sync access (done by the script when it can), these steps have no public API. Give the user **one** checklist with every value already filled in from the script's `RESOLVED CONFIGURATION` output. If browser-automation tools are available and the user agrees, drive the steps yourself instead; never type passwords for them.
 
-**A. AEM Code Sync** – <https://github.com/apps/aem-code-sync> → Configure → pick the org → *Only select repositories* → the new repo → Save. In the *AEM Configuration Setup* wizard: Code → Next; Content → source type is *Other (bring your own markup)* and the URL must equal `CONTENT_SOURCE_URL` → Next; Users → add `ADMINS` as admin → Next; Save.
+**A. AEM Code Sync** – depends on `CODE_SYNC` from the script output:
+- `added` or `already-covered`: the app already has access to the repo. Skip the install and go straight to the check below; run `scripts/verify.sh` and only continue with the wizard if `Code Sync` fails.
+- `manual`: the app has never been installed on this account, or the token cannot manage installations (GitHub requires a classic personal access token with `repo` scope for that call). First-time only: <https://github.com/apps/aem-code-sync/installations/new> → pick the account → *Only select repositories* → the new repo → Install. Never choose *All repositories* unless the user asks for it.
+
+If GitHub then shows the *AEM Configuration Setup* wizard: Code → Next; Content → source type is *Other (bring your own markup)* and the URL must equal `CONTENT_SOURCE_URL` → Next; Users → add `ADMINS` as admin → Next; Save.
 
 > If the org already had Code Sync on *All repositories*, the bot may have registered the site with the template's content source before step 2 ran. Have the user fix the Content Source URL at <https://tools.aem.live/tools/site-admin/index.html>.
 
