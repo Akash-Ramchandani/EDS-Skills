@@ -6,7 +6,7 @@
 set -euo pipefail
 
 REPO="" AEM="" SITE_NAME="" SITE_TITLE="" TEMPLATE="xwalk" VISIBILITY="public"
-DESCRIPTION="" DIR="" ADMINS="" DRY_RUN=0 SKIP_CLONE=0
+DESCRIPTION="" DIR="" ADMINS="" DRY_RUN=0 SKIP_CLONE=0 SKIP_CODE_SYNC=0
 
 usage() {
   cat <<USAGE
@@ -25,6 +25,7 @@ Optional (defaults follow aem.live guidance):
   --dir <path>              Local clone directory                  (default: ./<repo name>)
   --admins <a@x.com,b@x.com> Site config admins (shown in the checklist)
   --skip-clone              Edit fstab.yaml through the GitHub API, no local clone
+  --skip-code-sync          Do not add the repo to the AEM Code Sync GitHub app
   --dry-run                 Validate and print the plan; change nothing
 USAGE
 }
@@ -44,6 +45,7 @@ while [[ $# -gt 0 ]]; do
     --dir) DIR="${2:-}"; shift 2 ;;
     --admins) ADMINS="${2:-}"; shift 2 ;;
     --skip-clone) SKIP_CLONE=1; shift ;;
+    --skip-code-sync) SKIP_CODE_SYNC=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage >&2; die "unknown argument: $1" ;;
@@ -113,6 +115,7 @@ LIVE_URL=${LIVE_URL}
 LOCAL_DIR=${DIR}
 SITE_TEMPLATE_DIR=${TEMPLATE_DIR}
 ADMINS=${ADMINS:-<current user>}
+CODE_SYNC=${CODE_SYNC:-not-run}
 --------------------------------------------------------
 SUMMARY
 }
@@ -133,7 +136,7 @@ echo "gh authenticated as $(gh api user --jq .login)"
 FSTAB=$'mountpoints:\n  /:\n    url: "'"$MOUNT_URL"$'"\n    type: "markup"\n    suffix: ".html"\n'
 
 # ---- 1. repo from template ----------------------------------------------------
-step "1/4 GitHub repository ${OWNER}/${NAME}"
+step "1/5 GitHub repository ${OWNER}/${NAME}"
 if gh repo view "${OWNER}/${NAME}" >/dev/null 2>&1; then
   echo "Repository already exists - reusing it."
   gh api "repos/${OWNER}/${NAME}/contents/component-definition.json" >/dev/null 2>&1 \
@@ -150,7 +153,7 @@ for i in $(seq 1 30); do
 done
 
 # ---- 2. content source --------------------------------------------------------
-step "2/4 Point fstab.yaml at ${AEM_HOST}"
+step "2/5 Point fstab.yaml at ${AEM_HOST}"
 if (( SKIP_CLONE )); then
   current="$(gh api "repos/${OWNER}/${NAME}/contents/fstab.yaml" --jq .content 2>/dev/null | base64 -d 2>/dev/null || true)"
   if [[ "$current" == *"$MOUNT_URL"* ]]; then
@@ -184,8 +187,38 @@ else
   fi
 fi
 
-# ---- 3. AEM site template -----------------------------------------------------
-step "3/4 Download AEM site template (latest ${TEMPLATE_REPO} release)"
+# ---- 3. AEM Code Sync: grant the app access to THIS repo only ------------------
+# Runs after the fstab.yaml push on purpose: the bot reads the content source from it.
+step "3/5 AEM Code Sync access for ${OWNER}/${NAME}"
+CODE_SYNC="manual"
+CODE_SYNC_INSTALL_URL="https://github.com/apps/aem-code-sync/installations/new"
+if (( SKIP_CODE_SYNC )); then
+  echo "Skipped (--skip-code-sync)."
+elif inst="$(gh api --paginate /user/installations \
+      --jq ".installations[] | select(.app_slug==\"aem-code-sync\" and (.account.login|ascii_downcase)==\"${ORG_LC}\") | \"\(.id) \(.repository_selection)\"" 2>/dev/null | head -n1)" && [[ -n "$inst" ]]; then
+  inst_id="${inst%% *}"; selection="${inst##* }"
+  if [[ "$selection" == "all" ]]; then
+    echo "AEM Code Sync already has access to all repositories of ${OWNER}; nothing to add."
+    CODE_SYNC="already-covered"
+  else
+    repo_id="$(gh api "repos/${OWNER}/${NAME}" --jq .id)"
+    if gh api -X PUT "/user/installations/${inst_id}/repositories/${repo_id}" >/dev/null 2>&1; then
+      echo "Added ${OWNER}/${NAME} to the existing AEM Code Sync installation (selected repositories only)."
+      CODE_SYNC="added"
+    else
+      echo "WARN: GitHub refused to add the repo to installation ${inst_id}."
+      echo "      This API needs a classic personal access token with the 'repo' scope and admin rights on the repo."
+      echo "      Export one as GH_TOKEN and re-run, or add the repo by hand: https://github.com/settings/installations/${inst_id}"
+    fi
+  fi
+else
+  echo "AEM Code Sync is not installed for ${OWNER} yet (or this token cannot list app installations)."
+  echo "One-time step: open ${CODE_SYNC_INSTALL_URL}, choose 'Only select repositories' and pick ${NAME}."
+  echo "Later projects under ${OWNER} are then added automatically by this script."
+fi
+
+# ---- 4. AEM site template -----------------------------------------------------
+step "4/5 Download AEM site template (latest ${TEMPLATE_REPO} release)"
 mkdir -p "$TEMPLATE_DIR"
 if gh release download --repo "$TEMPLATE_REPO" --pattern '*.zip' --dir "$TEMPLATE_DIR" --clobber 2>/dev/null; then
   ls -1 "$TEMPLATE_DIR"
@@ -193,7 +226,7 @@ else
   echo "WARN: could not download automatically. Get the .zip from https://github.com/${TEMPLATE_REPO}/releases"
 fi
 
-# ---- 4. summary ---------------------------------------------------------------
-step "4/4 Done"
+# ---- 5. summary ---------------------------------------------------------------
+step "5/5 Done"
 print_summary
-echo "NEXT: install AEM Code Sync, create the AEM site, grant the technical account, publish."
+echo "NEXT: finish AEM Code Sync if CODE_SYNC=manual, create the AEM site, grant the technical account, publish."
