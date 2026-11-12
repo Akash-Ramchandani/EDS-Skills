@@ -86,7 +86,7 @@ case "$VISIBILITY" in public|private|internal) ;; *) die "--visibility must be p
 SITE_NAME="${SITE_NAME:-$NAME}"
 [[ "$SITE_NAME" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || die "--site-name must be lowercase letters, digits and hyphens"
 if [[ -z "$SITE_TITLE" ]]; then
-  SITE_TITLE="$(sed -E 's/-+/ /g; s/(^| )([a-z])/\1\u\2/g' <<<"$NAME")"
+  SITE_TITLE="$(awk '{for(i=1;i<=NF;i++)$i=toupper(substr($i,1,1)) substr($i,2)}1' <<<"${NAME//-/ }")"
 fi
 DESCRIPTION="${DESCRIPTION:-$SITE_TITLE - AEM Edge Delivery Services site authored with Universal Editor}"
 DIR="${DIR:-./$NAME}"
