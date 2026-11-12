@@ -31,7 +31,8 @@ If you leave out either required argument, Claude asks for it once, upfront.
 | Create repo from the xwalk boilerplate | automated (`gh`) |
 | Point `fstab.yaml` at your AEM author and push to `main` | automated |
 | Download the AEM site template | automated |
-| Install AEM Code Sync and finish its wizard | guided, values pre-filled |
+| Give AEM Code Sync access to the new repo only | automated once the app is installed on your account; guided the very first time |
+| AEM Code Sync setup wizard, if GitHub shows it | guided, values pre-filled |
 | Create the AEM site from the template | guided, values pre-filled |
 | Give the technical account the Config Admin role | guided |
 | Publish from Universal Editor | guided |
@@ -43,6 +44,7 @@ The guided steps need your GitHub and Adobe sign-ins in a browser and have no pu
 
 - [GitHub CLI](https://cli.github.com) signed in (`gh auth login`) with permission to create the repo
 - `git`, `curl`, `bash`
+- For the automatic Code Sync step: the AEM Code Sync app installed once on your account, and `GH_TOKEN` set to a classic personal access token with the `repo` scope if `gh`'s own login is refused
 - Access to an AEM as a Cloud Service author environment
 
 ## Install elsewhere
