@@ -4,21 +4,25 @@ Creates the GitHub repo for an AEM Edge Delivery Services + Universal Editor (xw
 
 It uses only the GitHub REST API, so it needs no browser, no `gh` CLI and no git clone, and it never prompts. That makes it safe to run in unattended or agentic workflows.
 
-## Use it in Claude Code
-
-```
-/create-ue-repo --repo acme/my-site --aem-author https://author-p12345-e67890.adobeaemcloud.com
-```
-
-## Run it without Claude
+## Run it
 
 Requires Node 18 or later.
 
 ```bash
 export GITHUB_TOKEN=...   # classic PAT with repo scope, or fine-grained with Administration + Contents write
-node .claude/skills/create-ue-repo/scripts/create-ue-repo.mjs --repo acme/my-site --aem-author https://author-p12345-e67890.adobeaemcloud.com --dry-run
-node .claude/skills/create-ue-repo/scripts/create-ue-repo.mjs --repo acme/my-site --aem-author https://author-p12345-e67890.adobeaemcloud.com
+node skills/create-ue-repo/scripts/create-ue-repo.mjs --repo acme/my-site --aem-author https://author-p12345-e67890.adobeaemcloud.com --dry-run
+node skills/create-ue-repo/scripts/create-ue-repo.mjs --repo acme/my-site --aem-author https://author-p12345-e67890.adobeaemcloud.com
 ```
+
+## Providing the token in an agentic workflow
+
+The script reads `GITHUB_TOKEN` from the environment of the process that runs it. Whatever runs `node create-ue-repo.mjs` must set that variable, normally from the platform's secret store:
+
+- Store the token once as a secret or credential in your workflow platform or its secret manager (for example Azure Key Vault, AWS Secrets Manager, GitHub Actions secrets, or your platform's credentials store).
+- In the step or node that runs the skill, map that secret to the environment variable `GITHUB_TOKEN`.
+- Pass only the non-secret values (`--repo`, `--aem-author` and so on) as arguments.
+
+Don't put the token in the workflow definition, the arguments, the prompt or logs.
 
 | Argument | Required | Default |
 |---|---|---|
@@ -46,8 +50,10 @@ Output is one JSON object on stdout, for example:
 
 Exit codes: `0` success, `2` invalid arguments, `1` other errors. Re-running the command is safe.
 
-## Install elsewhere
+## Use it from Claude Code (optional)
 
 ```bash
-cp -r .claude/skills/create-ue-repo ~/.claude/skills/
+cp -r skills/create-ue-repo ~/.claude/skills/
 ```
+
+Then run `/create-ue-repo --repo acme/my-site --aem-author https://author-p12345-e67890.adobeaemcloud.com`.
